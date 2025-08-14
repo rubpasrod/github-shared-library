@@ -41,9 +41,9 @@ jobs:
           uses: actions/checkout@v4
           with:
             token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-            repository: yggdrasilcorp/github-pipeline
+            repository: rubpasrod/github-shared-library
             ref:  ${{inputs.branch}}
-            path: github-pipeline
+            path: github-shared-library
               
         - name: Load all variables
           id: load
@@ -106,9 +106,9 @@ jobs:
           uses: actions/checkout@v4
           with:
             token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-            repository: yggdrasilcorp/github-pipeline
+            repository: rubpasrod/github-shared-library
             ref:  ${{inputs.branch}}
-            path: github-pipeline
+            path: github-shared-library
 
         - name: Build Script
           id: export
@@ -137,9 +137,9 @@ jobs:
           uses: actions/checkout@v4
           with:
             token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-            repository: yggdrasilcorp/github-pipeline
+            repository: rubpasrod/github-shared-library
             ref:  ${{inputs.branch}}
-            path: github-pipeline
+            path: github-shared-library
         
         - name: Prepare REPORTS_DIR
           id: check_enabled
