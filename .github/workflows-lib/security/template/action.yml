@@ -1,0 +1,47 @@
+name: Security Tool Template
+ 
+inputs:
+  command:
+    type: string
+  report_name:
+    type: string
+  scan_type:
+    type: string
+  all_in_one_upload:
+    type: string
+  config:
+    type: string
+  DEFECTDOJO_API_TOKEN:
+    type: string
+  base_url:
+    type: string
+  
+ 
+runs:
+  using: "composite"
+  steps:
+   
+    - name: "Create Report Directory"
+      shell: sh
+      run: |
+        mkdir -p "REPORTS_DIR"
+        chmod -R a+rw "REPORTS_DIR"
+         
+    - name: "Run Script"
+      shell: sh
+      run: |
+        echo "${{ inputs.command }}" > command.sh
+        chmod +x command.sh
+        echo "${{ inputs.report_name }}" >> REPORTS_DIR/report_names.txt
+        echo "${{ inputs.scan_type }}" >> REPORTS_DIR/scan_types.txt
+        ./command.sh
+      continue-on-error: true
+
+    # - name: "DefectDojo upload"
+    #   if: ${{ inputs.all_in_one_upload == 'false' }}
+    #   uses: ./github-pipeline/.github/workflows-lib/core/defect_dojo_template
+    #   with:
+    #     config: ${{ inputs.config }}
+    #     BASE_URL: ${{ fromJson(inputs.config).global.base_url }}
+    #     DEFECTDOJO_API_TOKEN: ${{ inputs.DEFECTDOJO_API_TOKEN }}
+    #     report: ${{ inputs.report_name }}

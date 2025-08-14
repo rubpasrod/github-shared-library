@@ -1,0 +1,202 @@
+name: Preflight
+
+on:
+    workflow_call:
+        secrets:
+          PERSONAL_ACCESS_TOKEN:
+              required: true
+              description: 'PAT'
+          DEFECTDOJO_API_TOKEN:
+              required: true
+              description: 'DefectDojo API Token'
+        inputs:
+          branch:
+            type: string
+            default: "develop"
+          base_url:
+            type: string
+          repository:
+            type: string
+            default: "yggdrasilcorp/github-pipeline"
+          runner-label:
+            type: string
+            required: true
+            default: self-hosted
+
+        outputs:
+          config:
+            value: ${{ jobs.build-scripts.outputs.config }}
+        
+jobs:
+    load-all:
+      name: "load-all"
+      runs-on: ${{ inputs.runner-label }}
+      outputs:
+        config: ${{ steps.load.outputs.config }}
+      steps:
+        - name: Checkout main repo
+          uses: actions/checkout@v4
+            
+        - name: Checkout github-pipeline
+          uses: actions/checkout@v4
+          with:
+            token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            repository: yggdrasilcorp/github-pipeline
+            ref:  ${{inputs.branch}}
+            path: github-pipeline
+              
+        - name: Load all variables
+          id: load
+          uses: ./github-pipeline/.github/workflows-lib/core/load_all_variables
+
+    # Init Node
+    node-dependencies:
+      needs: load-all
+      uses: ./.github/workflows/unified-template.yml
+      with:
+        config: ${{ needs.load-all.outputs.config }}
+        tool: ${{ fromJson(needs.load-all.outputs.config).nodedependencies.JOB_NAME }}
+        image: ${{ fromJson(needs.load-all.outputs.config).global.NODE_IMAGE }}
+        conditional: ${{ fromJson(needs.load-all.outputs.config).global.NODE_ENABLE_TOOL }}
+        branch: ${{ inputs.branch }}
+        runner-label: ${{ inputs.runner-label }}
+      secrets:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+    # Init Maven
+    maven-dependencies:
+      needs: load-all
+      uses: ./.github/workflows/unified-template.yml
+      with:
+        config: ${{ needs.load-all.outputs.config }}
+        tool: ${{ fromJson(needs.load-all.outputs.config).mavendependencies.JOB_NAME }}
+        image: ${{ fromJson(needs.load-all.outputs.config).global.MAVEN_IMAGE }}
+        conditional: ${{ fromJson(needs.load-all.outputs.config).global.MAVEN_ENABLE_TOOL }}
+        branch: ${{ inputs.branch }}
+        runner-label: ${{ inputs.runner-label }}
+      secrets:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+    security-gate:
+      name: "Security gate"
+      needs: [node-dependencies, maven-dependencies]      
+      runs-on: ${{ inputs.runner-label }}
+      steps:
+        - name: "Security gate"
+          run: |
+            if [[ "${{ needs.node-dependencies.outputs.skip }}" == "true" && "${{ needs.maven-dependencies.outputs.skip }}" == "true" ]]; then
+              echo "No dependencies to install. Skipping security gate step intentionally."
+              exit 1
+            else
+              echo "Security gate passed. Proceeding with the pipeline."
+            fi
+    
+    build-scripts:
+      needs: 
+        - load-all
+        - security-gate
+      runs-on: ${{ inputs.runner-label }}
+      outputs:
+        config: ${{ steps.export.outputs.config }}
+      steps:
+        - name: Checkout main repo
+          uses: actions/checkout@v4
+            
+        - name: Checkout github-pipeline
+          uses: actions/checkout@v4
+          with:
+            token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            repository: yggdrasilcorp/github-pipeline
+            ref:  ${{inputs.branch}}
+            path: github-pipeline
+
+        - name: Build Script
+          id: export
+          uses: ./github-pipeline/.github/workflows-lib/core/build_scripts
+          with: 
+            config: "${{ needs.load-all.outputs.config }}"
+
+    static-tools:
+      name: static-tools
+      needs: 
+        - load-all
+        - security-gate
+        - build-scripts
+      runs-on: ${{ inputs.runner-label }}
+      strategy:
+        matrix:
+          tool: [trufflehog, gitleaks] # , semgrep, checkov, dependency-check, kics
+      container:
+        image: ${{ fromJson(needs.build-scripts.outputs.config)[matrix.tool].image }} 
+        options: --entrypoint "" 
+      steps:
+        - name: Checkout main repo
+          uses: actions/checkout@v4
+            
+        - name: Checkout github-pipeline
+          uses: actions/checkout@v4
+          with:
+            token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            repository: yggdrasilcorp/github-pipeline
+            ref:  ${{inputs.branch}}
+            path: github-pipeline
+        
+        - name: Prepare REPORTS_DIR
+          id: check_enabled
+          run: |
+            ENABLED=${{ fromJson(needs.build-scripts.outputs.config)[matrix.tool].enabled }}
+            echo "enabled=$ENABLED" >> $GITHUB_OUTPUT
+
+            
+        - name: Run tool
+          if: ${{ steps.check_enabled.outputs.enabled == 'true' }}  
+          uses: ./github-pipeline/.github/workflows-lib/security/template
+          with: 
+            command: "${{ fromJson(needs.build-scripts.outputs.config)[matrix.tool].command }}"
+            report_name: "${{ fromJson(needs.build-scripts.outputs.config)[matrix.tool].report_name }}"
+            scan_type: "${{ fromJson(needs.build-scripts.outputs.config)[matrix.tool].scan_type }}"
+            all_in_one_upload: "${{ fromJson(needs.build-scripts.outputs.config).global.ALL_IN_ONE_UPLOAD }}"
+            config: "${{ needs.load-all.outputs.config }}"
+            DEFECTDOJO_API_TOKEN: "${{ secrets.DEFECTDOJO_API_TOKEN }}"
+            BASE_URL: "${{ inputs.base_url }}"
+          continue-on-error: true
+
+        - name: Upload reports artifact
+          if: ${{ steps.check_enabled.outputs.enabled == 'true' }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: temp-preflight-reports-${{ matrix.tool }}  
+            path: ./REPORTS_DIR/
+            retention-days: 1
+
+    unify-reports:
+      name: "Unify Reports"
+      needs: [static-tools]  
+      runs-on: ${{ inputs.runner-label }}
+      steps:
+        - name: Download all temp-report artifacts
+          uses: actions/download-artifact@v4
+          with:
+            path: all-reports
+            pattern: temp-preflight-reports-*
+            merge-multiple: true
+
+        - name: Create unified reports directory
+          run: |
+            mkdir -p preflight-reports
+            find all-reports -type f -exec cp {} preflight-reports \;
+
+        - name: Upload unified reports
+          uses: actions/upload-artifact@v4
+          with:
+            name: preflight-reports
+            path: preflight-reports/
+            retention-days: 1
+
+        - name: Delete Temp Artifacts
+          uses: jimschubert/delete-artifacts-action@v1
+          with:
+            GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            GITHUB_REPOSITORY: ${{ github.repository }}
+            pattern: temp-preflight-reports-*
+            min_bytes: '0'    

@@ -1,0 +1,138 @@
+name: Deploy
+on:
+    workflow_call:
+        secrets:
+            PERSONAL_ACCESS_TOKEN:
+              required: true
+              description: 'PAT'
+            DOCKER_USERNAME_2:
+              required: true
+              description: 'Docker Username'
+        inputs:
+          branch:
+            type: string
+            default: "develop"
+          config:
+            type: string
+          enabled:
+            type: string        
+          runner-label:
+            type: string
+            required: true
+            default: self-hosted    
+      
+jobs:   
+    deploy-kubernetes:
+      if: ${{ inputs.enabled == 'true'}}
+      runs-on: ${{ inputs.runner-label }}
+      steps:
+        - name: Checkout main repo
+          uses: actions/checkout@v4
+            
+        - name: Checkout github-pipeline
+          uses: actions/checkout@v4
+          with:
+            token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            repository: yggdrasilcorp/github-pipeline
+            ref:  ${{inputs.branch}}
+            path: github-pipeline
+  
+        - name: Install kubectl
+          uses: azure/setup-kubectl@v3
+          with:
+            version: 'v1.29.0' 
+
+        - name: Deploy Container
+          uses: ./github-pipeline/.github/workflows-lib/core/deploy-kube
+          with: 
+            config: "${{ inputs.config }}"
+            docker_username: "${{ secrets.DOCKER_USERNAME_2 }}"
+
+    port-forward:
+      if: ${{ inputs.enabled == 'true'}}
+      runs-on: ${{ inputs.runner-label }}
+      needs: deploy-kubernetes
+      steps:
+        - name: "Port Forward WebGoat"
+          run: |
+            kubectl port-forward svc/${{ fromJson(inputs.config).deploy.SERVICE_NAME }} 8085:8080 &
+            sleep 10
+
+    dynamic-tools:
+      if: ${{ inputs.enabled == 'true'}}
+      name: Tool
+      needs: 
+        - port-forward
+      runs-on: ${{ inputs.runner-label }}
+      strategy:
+        matrix:
+          tool: [zap]
+      container:
+        image: ${{ fromJson(inputs.config)[matrix.tool].image }} 
+        options: --entrypoint "" 
+      steps:
+        - name: Checkout main repo
+          uses: actions/checkout@v4
+            
+        - name: Checkout github-pipeline
+          uses: actions/checkout@v4
+          with:
+            token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            repository: yggdrasilcorp/github-pipeline
+            ref:  ${{inputs.branch}}
+            path: github-pipeline
+
+        - name: Prepare REPORTS_DIR
+          id: check_enabled
+          run: |
+            ENABLED=${{ fromJson(inputs.config)[matrix.tool].enabled }}
+            echo "enabled=$ENABLED" >> $GITHUB_OUTPUT
+
+        - name: Run tool
+          if: ${{ steps.check_enabled.outputs.enabled == 'true' }}  
+          uses: ./github-pipeline/.github/workflows-lib/security/template
+          with: 
+            command: "${{ fromJson(inputs.config)[matrix.tool].command }}"
+            report_name: "${{ fromJson(inputs.config)[matrix.tool].report_name }}"
+            scan_type: "${{ fromJson(inputs.config)[matrix.tool].scan_type }}"
+          continue-on-error: true
+
+        - name: "Upload reports artifact"
+          if: ${{ steps.check_enabled.outputs.enabled == 'true' }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: temp-deploy-reports-${{ matrix.tool }}
+            path: ./REPORTS_DIR/
+            retention-days: 1
+
+    unify-reports:
+      name: "Unify Reports"
+      needs: [dynamic-tools]  
+      runs-on: ${{ inputs.runner-label }}
+      steps:
+        - name: Download all temp-reports artifacts
+          uses: actions/download-artifact@v4
+          with:
+            path: all-reports
+            pattern: temp-deploy-reports-*
+            merge-multiple: true
+
+        - name: Create unified reports directory
+          run: |
+            mkdir -p deploy-reports
+            find all-reports -type f -exec cp {} deploy-reports \;
+
+        - name: Upload unified reports
+          uses: actions/upload-artifact@v4
+          with:
+            name: deploy-reports
+            path: deploy-reports/
+            retention-days: 1
+
+        - name: Delete Temp Artifacts
+          uses: jimschubert/delete-artifacts-action@v1
+          with:
+            GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            GITHUB_REPOSITORY: ${{ github.repository }}
+            pattern: temp-deploy-reports-*
+            min_bytes: '0'   

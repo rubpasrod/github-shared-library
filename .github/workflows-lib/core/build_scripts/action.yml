@@ -1,0 +1,75 @@
+name: "Build Script Action"
+
+inputs:
+  config:
+    type: string
+
+outputs:
+  config:
+    value: ${{ steps.export.outputs.config }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate enriched config
+      shell: bash
+      id: generate
+      env:
+        CONFIG: ${{ inputs.config }}
+      run: |
+          echo "CONFIG content:"
+          echo "$CONFIG" | jq .
+
+          echo '{}' > final_config.json
+
+          TOOLS=$(echo "$CONFIG" | jq -r 'keys[]')
+          for TOOL in $TOOLS; do
+            TOOL_CONFIG=$(echo "$CONFIG" | jq -r ".\"$TOOL\"")
+            echo "$TOOL_CONFIG" > tool.json
+
+            # Export vars
+            while read -r line; do
+              export "$line"
+            done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' tool.json)
+
+            HAS_SCRIPT=$(jq 'has("SCRIPT")' tool.json)
+            if [ "$HAS_SCRIPT" = "true" ]; then
+              RAW_SCRIPT=$(jq -r '.SCRIPT' tool.json)
+              FINAL_SCRIPT="$RAW_SCRIPT"
+              for VAR in $(jq -r 'keys[]' tool.json); do
+                VALUE=$(jq -r ".\"$VAR\"" tool.json)
+                FINAL_SCRIPT="${FINAL_SCRIPT//\$$VAR/$VALUE}"
+              done
+
+              JOB_NAME=$(jq -r '.JOB_NAME' tool.json)
+              FORMAT=$(jq -r '.FORMAT' tool.json)
+              REPORT_NAME="${JOB_NAME}.${FORMAT}"
+
+
+              jq -n \
+                --arg command "$FINAL_SCRIPT" \
+                --arg report "$REPORT_NAME" \
+                --arg scan "$(jq -r '.SCAN_TYPE' tool.json)" \
+                --arg enabled "$(jq -r '.ENABLED_SEC_TOOL' tool.json)" \
+                --arg image "$(jq -r '.IMAGE' tool.json)" \
+                '{command: $command, report_name: $report, scan_type: $scan, image: $image, enabled: $enabled}' \
+                > enriched_tool.json
+            else
+              cp tool.json enriched_tool.json
+            fi
+
+            jq --arg key "$TOOL" --slurp '.[0] + {($key): .[1]}' final_config.json enriched_tool.json > tmp.json && mv tmp.json final_config.json
+          done
+
+    - name: Export final config
+      id: export
+      shell: bash
+      run: |
+        CONFIG=$(jq -c . final_config.json)
+        echo "config=$CONFIG" >> $GITHUB_OUTPUT
+
+    - name: Upload final config artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: final-config
+        path: final_config.json

@@ -1,0 +1,88 @@
+name: "Load all variables"
+
+outputs:
+  config:
+    value: ${{ steps.collect.outputs.config }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Read all the .config files and convert to JSON"
+      id: collect
+      shell: bash
+      run: |
+        set -e
+
+        to_json() {
+          local default_file="$1"
+          local override_file="$2"
+          local tool_name="$3"
+
+          declare -A vars
+
+          # Leer default siempre
+          while IFS='=' read -r key val; do
+            [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+            val="${val#\"}"; val="${val%\"}"
+            val="${val#\'}"; val="${val%\'}"
+            vars["$key"]="$val"
+          done < "$default_file"
+
+          # Leer override si existe y sobrescribir excepto las 3 variables clave
+          if [ -f "$override_file" ]; then
+            while IFS='=' read -r key val; do
+              [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+              if [[ "$key" == "SEC_TOOL_NAME" || "$key" == "JOB_NAME" || "$key" == "SCRIPT" ]]; then
+                continue
+              fi
+              val="${val#\"}"; val="${val%\"}"
+              val="${val#\'}"; val="${val%\'}"
+              vars["$key"]="$val"
+            done < "$override_file"
+          fi
+
+          # Generar JSON ordenado para consistencia
+          echo -n "\"$tool_name\": {"
+          first=1
+          for key in $(printf '%s\n' "${!vars[@]}" | sort); do
+            value="${vars[$key]}"
+            escaped_value=$(printf '%s' "$value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+            if [ "$first" -eq 0 ]; then
+              echo -n ", "
+            fi
+            echo -n "\"$key\": \"$escaped_value\""
+            first=0
+          done
+          echo -n "}"
+        }
+
+
+        echo "{" > all_tools.json
+
+        first=1
+        for default_file in github-pipeline/config/*-default.config; do
+          tool_name=$(basename "$default_file" -default.config)
+          override_file=".github/workflows/config/$tool_name.config"
+
+          if [ "$first" -eq 0 ]; then
+            echo "," >> all_tools.json
+          fi
+
+          (
+            to_json "$default_file" "$override_file" "$tool_name"
+          ) >> all_tools.json
+
+          first=0
+        done
+
+        echo "}" >> all_tools.json
+
+        config_json=$(jq -c . < all_tools.json)
+        echo "config=$config_json" >> "$GITHUB_OUTPUT"
+
+      
+    - name: Upload final config artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: config
+        path: all_tools.json

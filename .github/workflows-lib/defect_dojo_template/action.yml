@@ -1,0 +1,118 @@
+name: "Defect Dojo Upload Template"
+
+inputs:
+  config:
+    description: "Pipeline config"
+    required: true
+    type: string
+  DEFECTDOJO_API_TOKEN:
+    description: "DefectDojo API Token"
+    required: true
+    type: string
+  BASE_URL:
+    description: "DefectDojo base URL"
+    required: false
+    default: "https://defectdojo.appsec-yggdrasil.com/"
+    type: string
+  report:
+    description: "Report name or path"
+    required: false
+    default: "null"
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Debug working directory and files
+      shell: bash
+      run: |
+        echo "Current working directory: $(pwd)"
+        echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+
+        # Always start at repo root
+        cd "$GITHUB_WORKSPACE" || exit 1
+
+        echo "Listing repo root:"
+        ls -la
+
+        echo "Listing defectdojo scripts folder:"
+        if cd github-pipeline/scripts/defectdojo 2>/dev/null; then
+          ls -la
+        else
+          echo "❌ defectdojo scripts folder does not exist!"
+        fi
+
+
+    - name: "Check REPORTS directory"
+      id: check_reports
+      shell: bash
+      run: |
+        REPORTS_DIR="$GITHUB_WORKSPACE/REPORTS_DIR/temp-reports"
+        echo "Checking reports directory: $REPORTS_DIR"
+        ls -la "$REPORTS_DIR" || echo "Directory does not exist"
+        if [ -d "$REPORTS_DIR" ] && [ -n "$(find "$REPORTS_DIR" -mindepth 1 -print -quit)" ]; then
+          echo "exist=true" >> $GITHUB_OUTPUT
+        else
+          echo "exist=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create engagement
+      if: ${{ steps.check_reports.outputs.exist == 'true' }}
+      shell: bash
+      id: set-id
+      env:
+        API_TOKEN: ${{ inputs.DEFECTDOJO_API_TOKEN }}
+        BASE_URL: ${{ inputs.BASE_URL }}
+        ENGAGEMENT_NAME:  ${{ fromJson(inputs.config).global.ENGAGEMENT_NAME }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+      run: |
+        set -e
+        cd github-pipeline/scripts/defectdojo || { echo "❌ defectdojo script folder not found!"; exit 1; }
+
+        if [ ! -f create-engagement.sh ]; then
+          echo "❌ create-engagement.sh not found!"
+          exit 1
+        fi
+
+        chmod +x create-engagement.sh
+        echo "🚀 Running create-engagement.sh..."
+        if ! ENGAGEMENT_ID=$(./create-engagement.sh 2>&1); then
+          echo "❌ create-engagement.sh failed"
+          echo "Output:"
+          echo "$ENGAGEMENT_ID"
+          exit 1
+        fi
+        echo "✅ Engagement created with ID: $ENGAGEMENT_ID"
+        echo "engagement_id=${ENGAGEMENT_ID}" >> "$GITHUB_OUTPUT"
+
+    - name: List REPORTS_DIR contents
+      shell: bash
+      run: |
+        echo "Listing $GITHUB_WORKSPACE/REPORTS_DIR:"
+        ls -la "$GITHUB_WORKSPACE/REPORTS_DIR" || echo "REPORTS_DIR does not exist"
+
+        echo "Listing $GITHUB_WORKSPACE/REPORTS_DIR/temp-reports:"
+        ls -la "$GITHUB_WORKSPACE/REPORTS_DIR/temp-reports" || echo "temp-reports does not exist"
+
+
+
+    - name: Upload scan results
+      if: ${{ steps.check_reports.outputs.exist == 'true' }}
+      shell: bash
+      env:
+        API_TOKEN: ${{ inputs.DEFECTDOJO_API_TOKEN }}
+        BASE_URL: ${{ inputs.BASE_URL }}
+        ENGAGEMENT_ID:  ${{ steps.set-id.outputs.engagement_id }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+      run: |
+        cd github-pipeline/scripts/defectdojo || { echo "❌ defectdojo script folder not found!"; exit 1; }
+        if [ ! -f upload-scan.sh ]; then
+          echo "upload-scan.sh not found!"
+          exit 1
+        fi
+
+        chmod +x upload-scan.sh
+        ./upload-scan.sh
+        echo "${{ steps.set-id.outputs.engagement_id }}"
+

@@ -1,0 +1,44 @@
+name: Sync ALL branches to Azure DevOps with PAT Debug
+
+env:
+  ADO_ORG: "Delivery-Toolchain"
+  ADO_PROJECT: "AppSec Valkiria Pipeline"
+  ADO_REPO: "github-pipelines-library"
+  ADO_USER: "github"
+
+on:
+  # push:
+  #   branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout GitHub repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Debug git config
+        run: git config --list
+
+      - name: Configure ADO remote with PAT
+        env:
+          AZURE_DEVOPS_PAT: ${{ secrets.TEST_ADO_PAT }}
+        run: |
+          set -x
+          ADO_PROJECT_ESCAPED="${ADO_PROJECT// /%20}"
+          REMOTE_URL="https://${ADO_USER}:${AZURE_DEVOPS_PAT}@dev.azure.com/${ADO_ORG}/${ADO_PROJECT_ESCAPED}/_git/${ADO_REPO}"
+          echo "Remote URL: ${REMOTE_URL//${AZURE_DEVOPS_PAT}/***}"
+          git remote add ado "$REMOTE_URL"
+          git remote -v
+
+      - name: Push current branch to ADO using PAT
+        env:
+          AZURE_DEVOPS_PAT: ${{ secrets.TEST_ADO_PAT }}
+        run: |
+          set -x
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          echo "Pushing branch: $BRANCH_NAME"
+          git push ado HEAD:"$BRANCH_NAME" --force

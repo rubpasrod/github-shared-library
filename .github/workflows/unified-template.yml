@@ -1,0 +1,63 @@
+name: Unified Template
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        required: true
+        type: string
+      image:
+        type: string
+      tool:
+        type: string
+      conditional:
+        type: string
+      branch:
+        type: string
+        default: 'develop'
+      runner-label:
+        type: string
+        required: true
+        default: self-hosted  
+    secrets:
+      PERSONAL_ACCESS_TOKEN:
+        required: true
+    outputs:
+      skip:
+        value: ${{ jobs.unified-template.outputs.skip }}
+
+jobs:
+  unified-template:
+    runs-on: ${{ inputs.runner-label }}
+    container:
+      image: ${{ inputs.image }}
+      # options: --user 1000:1000 
+    outputs:
+      skip: ${{ steps.conditional.outputs.skip }}
+    steps:
+      - name: Early Exit if Tool Not Enabled
+        if: ${{ inputs.conditional != 'true' }}
+        id: conditional
+        run: |
+          echo "This tool is not enabled. Skipping."
+          echo "skip=true" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        if: ${{ steps.conditional.outputs.skip != 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Checkout github-pipeline
+        if: ${{ steps.conditional.outputs.skip != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          repository: yggdrasilcorp/github-pipeline
+          ref: ${{ inputs.branch }}
+          path: github-pipeline
+
+      - name: Run Tool
+        if: ${{ steps.conditional.outputs.skip != 'true' }}
+        uses: ./github-pipeline/.github/workflows-lib/core/managers/run-template
+        with:
+          config: ${{ inputs.config }}
+          tool: ${{ inputs.tool }}

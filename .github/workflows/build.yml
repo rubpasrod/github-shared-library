@@ -1,0 +1,95 @@
+name: Build
+on:
+    workflow_call:
+        secrets:
+            PERSONAL_ACCESS_TOKEN:
+              required: true
+              description: 'PAT'
+            DOCKER_USERNAME_2:
+              required: true
+              description: 'Docker Username'
+            DOCKER_PASSWORD_2:
+              required: true
+              description: 'Docker Password'
+        inputs:
+          branch:
+            type: string
+            default: "develop"
+          config:
+            type: string
+          enabled:
+            type: string     
+          runner-label:
+            type: string
+            required: true
+            default: self-hosted
+          project_type:
+            type: string
+            default: "node"
+        
+jobs: 
+    maven-build:
+      if: ${{ inputs.enabled == 'true'}}
+      uses: ./.github/workflows/unified-template.yml
+      with:
+        config: ${{ inputs.config }}
+        tool: ${{ fromJson(inputs.config).mavenbuild.JOB_NAME }}
+        image: ${{ fromJson(inputs.config).global.MAVEN_IMAGE}}
+        conditional: ${{ fromJson(inputs.config).global.MAVEN_ENABLE_TOOL }}
+        branch: ${{ inputs.branch }}
+        runner-label: ${{ inputs.runner-label }}
+      secrets:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+    node-build:
+      if: ${{ inputs.enabled == 'true'}}
+      uses: ./.github/workflows/unified-template.yml
+      with:
+        config: ${{ inputs.config }}
+        tool: ${{ fromJson(inputs.config).nodebuild.JOB_NAME }}
+        image: ${{ fromJson(inputs.config).global.NODE_IMAGE }}
+        conditional: ${{ fromJson(inputs.config).global.NODE_ENABLE_TOOL }}
+        branch: ${{ inputs.branch }}
+        runner-label: ${{ inputs.runner-label }}
+      secrets:
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+    security-gate:
+      if: ${{ inputs.enabled == 'true'}}
+      name: "Security gate"
+      needs: [node-build, maven-build]      
+      runs-on: ${{ inputs.runner-label }}
+      steps:
+        - name: "Security gate"
+          run: |
+            if [[ "${{ needs.node-build.outputs.skip }}" == "true" && "${{ needs.maven-build.outputs.skip }}" == "true" ]]; then
+              echo "Skipping security gate step intentionally."
+              exit 1
+            else
+              echo "Security gate passed. Proceeding with the pipeline."
+            fi
+    
+    docker-build:
+      if: ${{ inputs.enabled == 'true'}}
+      name: "docker-build"
+      needs: security-gate
+      runs-on: ${{ inputs.runner-label }}
+      steps:
+        - name: Checkout main repo
+          uses: actions/checkout@v4
+            
+        - name: Checkout github-pipeline
+          uses: actions/checkout@v4
+          with:
+            token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            repository: yggdrasilcorp/github-pipeline
+            ref:  ${{inputs.branch}}
+            path: github-pipeline
+            
+        - name: "Docker Build"
+          uses: ./github-pipeline/.github/workflows-lib/docker/docker-build
+          with:
+            docker_image: ${{ fromJson(inputs.config).docker.IMAGE_NAME }}
+            docker_tag: ${{ fromJson(inputs.config).docker.TAG }}
+            docker_username: ${{ secrets.DOCKER_USERNAME_2 }}
+            docker_password: ${{ secrets.DOCKER_PASSWORD_2 }}

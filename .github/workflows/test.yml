@@ -1,0 +1,103 @@
+name: Test
+on:
+    workflow_call:
+        secrets:
+            PERSONAL_ACCESS_TOKEN:
+              required: true
+              description: 'PAT'
+            DEFECTDOJO_API_TOKEN:
+              required: true
+              description: 'DefectDojo API Token'
+        inputs:
+            branch:
+              type: string
+              default: "develop"
+            base_url:
+              type: string
+            config:
+              type: string
+            runner-label:
+              type: string
+              required: true
+              default: self-hosted  
+
+jobs:
+  test-tools:
+      name: Tool
+      runs-on: ${{ inputs.runner-label }}
+      strategy:
+        matrix:
+          tool: [trivy]
+      container:
+        image: ${{ fromJson(inputs.config)[matrix.tool].IMAGE }} 
+        options: --entrypoint "" 
+      steps:
+        - name: Checkout main repo
+          uses: actions/checkout@v4
+            
+        - name: Checkout github-pipeline
+          uses: actions/checkout@v4
+          with:
+            token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            repository: yggdrasilcorp/github-pipeline
+            ref:  ${{inputs.branch}}
+            path: github-pipeline
+            
+        - name: Prepare REPORTS_DIR
+          id: check_enabled
+          run: |
+            ENABLED=${{ fromJson(inputs.config)[matrix.tool].enabled }}
+            echo "enabled=$ENABLED" >> $GITHUB_OUTPUT
+
+        - name: Run tool
+          if: ${{ steps.check_enabled.outputs.enabled == 'true' }}  
+          uses: ./github-pipeline/.github/workflows-lib/security/template
+          with: 
+            command: "${{ fromJson(inputs.config)[matrix.tool].command }}"
+            report_name: "${{ fromJson(inputs.config)[matrix.tool].report_name }}"
+            scan_type: "${{ fromJson(inputs.config)[matrix.tool].scan_type }}"
+            all_in_one_upload: "${{ fromJson(inputs.config).global.ALL_IN_ONE_UPLOAD }}"
+            config: "${{ inputs.config }}"
+            DEFECTDOJO_API_TOKEN: "${{ secrets.DEFECTDOJO_API_TOKEN }}"
+            BASE_URL: "${{ inputs.base_url }}"
+          continue-on-error: true
+        
+        - name: "Upload reports artifact"
+          if: ${{ steps.check_enabled.outputs.enabled == 'true' }}
+          uses: actions/upload-artifact@v4
+          with:
+            name: temp-test-reports-${{ matrix.tool }}
+            path: ./REPORTS_DIR/
+            retention-days: 1
+
+  unify-reports:
+    name: "Unify Reports"
+    needs: [test-tools]  
+    runs-on: ${{ inputs.runner-label }}
+    steps:
+      - name: Download all temp-reports artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-reports
+          pattern: temp-test-reports-*
+          merge-multiple: true
+
+      - name: Create unified reports directory
+        run: |
+          mkdir -p test-reports
+          find all-reports -type f -exec cp {} test-reports \;
+
+      - name: Upload unified reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: test-reports/
+          retention-days: 1
+
+      - name: Delete Temp Artifacts
+        uses: jimschubert/delete-artifacts-action@v1
+        with:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          pattern: temp-test-reports-*
+          min_bytes: '0'   

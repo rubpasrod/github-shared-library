@@ -1,0 +1,36 @@
+name: Release
+on:
+    workflow_call:
+        secrets:
+            PERSONAL_ACCESS_TOKEN:
+              required: true
+              description: 'PAT'
+            DOCKER_USERNAME_2:
+              required: true
+              description: 'Docker Username'
+            DOCKER_PASSWORD_2:
+              required: true
+              description: 'Docker Passwd'
+        inputs:
+            branch:
+              type: string
+              default: "develop"
+            config:
+              type: string
+            enabled:
+              type: string  
+            runner-label:
+              type: string
+              required: true
+              default: self-hosted  
+        
+jobs:
+  release:
+    if: ${{ inputs.enabled == 'true'}}
+    runs-on: ${{ inputs.runner-label }}
+    steps:
+        - name: Log in to Docker Hub
+          run: echo "${{ secrets.DOCKER_PASSWORD_2 }}" | docker login -u "${{ secrets.DOCKER_USERNAME_2 }}" --password-stdin  
+        
+        - name: Push Docker image
+          run: docker push ${{ secrets.DOCKER_USERNAME_2 }}/${{ fromJson(inputs.config).docker.IMAGE_NAME }}:${{ fromJson(inputs.config).docker.TAG }}

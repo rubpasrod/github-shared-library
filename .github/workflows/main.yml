@@ -1,0 +1,176 @@
+name: Shared Pipeline 
+
+on:
+  workflow_call:
+    secrets:
+      PERSONAL_ACCESS_TOKEN:
+        required: true
+        description: 'PAT'
+      DEFECTDOJO_API_TOKEN:
+        required: true
+        description: 'DefectDojo API Token'
+      DOCKER_USERNAME_2:
+        required: true
+        description: 'Docker Username'
+      DOCKER_PASSWORD_2:
+        required: true
+        description: 'Docker Passwd'
+    inputs:
+      repository:
+        type: string
+        default: "WebGoat"
+      branch:
+        type: string
+        default: "develop"
+      runner-label:
+        type: string
+        required: true
+        default: self-hosted
+      BASE_URL:
+        type: string
+        default: "https://defectdojo.appsec-yggdrasil.com/"
+
+jobs:
+  pre-clean-runner:
+    runs-on: ${{ inputs.runner-label }}
+    steps:
+      - name: "Clean Runner"
+        run: |
+            cd ${{ github.workspace }}/..
+            echo "Deleting repository from: $(pwd)/${{ inputs.repository }}"
+            rm -rf ${{ inputs.repository }}
+
+  preflight:
+    needs: pre-clean-runner
+    uses: ./.github/workflows/preflight.yml
+    secrets:
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      DEFECTDOJO_API_TOKEN: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+    with:
+      branch: ${{ inputs.branch }}
+      base_url: ${{ inputs.base_url }}
+      runner-label: ${{ inputs.runner-label }}
+
+  build:
+    needs: 
+      - preflight
+    uses: ./.github/workflows/build.yml
+    secrets:
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      DOCKER_USERNAME_2: ${{ secrets.DOCKER_USERNAME_2 }}
+      DOCKER_PASSWORD_2: ${{ secrets.DOCKER_PASSWORD_2 }} 
+    with:
+      config: ${{ needs.preflight.outputs.config }}
+      branch: ${{ inputs.branch }}
+      enabled: ${{ fromJson(needs.preflight.outputs.config).global.BUILD_ENABLED == 'true' }}
+      runner-label: ${{ inputs.runner-label }}
+  
+  test:
+    needs:
+      - preflight 
+      - build
+    uses: ./.github/workflows/test.yml
+    secrets:
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      DEFECTDOJO_API_TOKEN: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+    with:
+      config: ${{ needs.preflight.outputs.config }}
+      branch: ${{ inputs.branch }}
+      base_url: ${{ inputs.base_url }}
+      runner-label: ${{ inputs.runner-label }}
+    if: ${{ fromJson(needs.preflight.outputs.config).global.TEST_ENABLED == 'true' }}
+
+
+  # deploy:
+  #   needs: 
+  #     - build
+  #     - preflight
+  #   uses: ./.github/workflows/deploy.yml
+  #   secrets:
+  #     DOCKER_USERNAME_2: ${{ secrets.DOCKER_USERNAME_2 }}
+  #     PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+  #   with:
+  #     config: ${{ needs.preflight.outputs.config }}
+  #     branch: ${{ inputs.branch }}
+  #     enabled: ${{ fromJson(needs.preflight.outputs.config).global.DEPLOY_ENABLED == 'true' }}
+  #     runner-label: ${{ inputs.runner-label }}
+
+  # release:
+  #   needs: 
+  #     # - deploy
+  #     - test
+  #     - preflight
+  #   uses: ./.github/workflows/release.yml
+  #   secrets:
+  #     PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+  #     DOCKER_USERNAME_2: ${{ secrets.DOCKER_USERNAME_2 }}
+  #     DOCKER_PASSWORD_2: ${{ secrets.DOCKER_PASSWORD_2 }} 
+  #   with:
+  #     config: ${{ needs.preflight.outputs.config }}
+  #     branch: ${{ inputs.branch }}
+  #     enabled: ${{ fromJson(needs.preflight.outputs.config).global.RELEASE_ENABLED == 'true' }}
+  #     runner-label: ${{ inputs.runner-label }}
+  
+  defectdojo-upload:
+    name: "DefectDojo Upload"
+    runs-on: ${{ inputs.runner-label }}
+    needs: 
+      - test
+      - preflight
+    env:
+      all_in_one_upload: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD }}
+      REPORTS_DIR: ${{ github.workspace }}/REPORTS_DIR
+    steps:
+      - name: "Check if all the jobs have to be uploaded"
+        id: check_reports
+        run: |
+          echo "exist=true" >> $GITHUB_OUTPUT
+
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+          
+      - name: Checkout github-pipeline
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          repository: yggdrasilcorp/github-pipeline
+          ref:  ${{inputs.branch}}
+          path: github-pipeline
+      
+      - name: Create REPORTS_DIR
+        run: |
+          mkdir -p $REPORTS_DIR/temp-reports
+      
+      - name: Download all reports artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ github.workspace }}/REPORTS_DIR/temp-reports
+          pattern: '*-reports'
+          merge-multiple: true
+
+      - name: Debug reports directory
+        run: |
+          echo "Listing downloaded reports:"
+          ls -la $REPORTS_DIR/temp-reports || echo "No reports found"
+
+      - name: "Upload to DefectDojo"
+        if: ${{ steps.check_reports.outputs.exist == 'true' }}
+        uses: ./github-pipeline/.github/workflows-lib/defect_dojo_template
+        with:
+          config: ${{ needs.preflight.outputs.config }}
+          BASE_URL: ${{ fromJson(needs.preflight.outputs.config).global.BASE_URL }}
+          DEFECTDOJO_API_TOKEN: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+
+          
+  clean-runner:
+    needs: 
+      - defectdojo-upload
+    if: always()
+    runs-on: ${{ inputs.runner-label }}
+    steps:
+      - name: "Clean Runner"
+        run: |
+            cd ${{ github.workspace }}/..
+            echo "Deleting repository from: $(pwd)/${{ inputs.repository }}"
+            ls
+            rm -rf ${{ inputs.repository }}

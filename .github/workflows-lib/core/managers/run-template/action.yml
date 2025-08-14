@@ -1,0 +1,168 @@
+name: "Run Template"
+
+inputs:
+  config:
+    type: string
+  tool:
+    type: string
+  java-v:
+    type: string
+    default: '23'
+  artifact-path:
+    required: false
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: "Export input tool"
+      shell: bash
+      run: echo "INPUT_TOOL=${{ inputs.tool }}" >> $GITHUB_ENV
+
+    - name: Prepare variables
+      shell: bash
+      run: |
+        echo '${{ inputs.config }}' > config.json
+        node <<EOF
+        const fs = require('fs');
+        const config = JSON.parse(fs.readFileSync('config.json', 'utf-8'));
+        const tool = '${{ inputs.tool }}';
+        const data = config[tool];
+
+        const envLines = [
+          \`ARTIFACT_PATH=\${data.ARTIFACT_PATH}\`,
+          \`CACHE_PATH=\${data.CACHE_PATH}\`,
+          \`COMMAND=\${data.COMMAND}\`,
+          \`GOALS=\${data.GOALS}\`,
+          \`EXTRA_ARGS=\${data.EXTRA_ARGS}\`,
+          \`FILEPATH=\${data.FILEPATH}\`
+        ];
+
+        fs.appendFileSync(process.env.GITHUB_ENV, envLines.join('\\n') + '\\n');
+        EOF
+
+    - name: "Create directories"
+      shell: sh
+      run: |
+        mkdir -p "$ARTIFACT_PATH" "$CACHE_PATH"
+
+
+    - name: "Cache Node Modules"
+      if: ${{ inputs.tool == 'nodedependencies' || inputs.tool == 'nodebuild' }}
+      id: cache-node-modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          node_modules
+          .npm
+          /usr/local/lib/node_modules  
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: "Cache Other Dependencies"
+      if: ${{ inputs.tool != 'nodedependencies' && inputs.tool != 'nodebuild' }}
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.CACHE_PATH }}
+        key: ${{ runner.os }}-${{ inputs.tool }}-${{ hashFiles('**/pom.xml', '**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ inputs.tool }}-
+
+    - name: "Setup Java"
+      uses: actions/setup-java@v4
+      with:
+          distribution: 'temurin'
+          java-version: '${{ inputs.java-v }}'
+          architecture: x64
+          overwrite-settings: false
+
+    - name: "Run Maven Command"
+      shell: sh
+      run: |
+        if [ "$INPUT_TOOL" = "mavendependencies" ] || [ "$INPUT_TOOL" = "mavenbuild" ]; then
+          if [ ! -d "$CACHE_PATH" ] || [ -z "$(find "$CACHE_PATH" -mindepth 1 -print -quit)" ]; then
+            $COMMAND $GOALS $EXTRA_ARGS -f $FILEPATH
+          else
+            echo "Skipping ${{ inputs.tool }} execution as dependencies are already cached."
+          fi
+        fi
+
+    - name: "Run Node Command"
+      shell: bash
+      run: |
+        echo "Current working directory: $(pwd)"
+        echo "INPUT_TOOL: $INPUT_TOOL"
+        echo "COMMAND: $COMMAND"
+
+        if [ "$INPUT_TOOL" = "nodedependencies" ]; then
+          if [ ! -d "$CACHE_PATH" ] || [ -z "$(ls -A "$CACHE_PATH")" ]; then
+            echo "Installing root dependencies..."
+            npm install --legacy-peer-deps
+            
+            echo "Installing frontend dependencies..."
+            cd frontend && npm install --legacy-peer-deps && cd ..
+          else
+            echo "Skipping dependency installation (cache hit)"
+          fi
+
+        elif [ "$INPUT_TOOL" = "nodebuild" ]; then
+          echo "Running build commands"
+
+          # Install specific TypeScript version compatible with Angular
+          echo "Installing build tools..."
+          npm install typescript@~5.8.0 --no-save
+
+          # Verify frontend dependencies
+          if [ ! -d "frontend/node_modules" ]; then
+            echo "Installing frontend dependencies..."
+            cd frontend && npm install --legacy-peer-deps && cd ..
+          fi
+
+          # Use local Angular CLI from frontend
+          echo "Using frontend local Angular CLI"
+          export PATH="$PATH:$PWD/frontend/node_modules/.bin"
+
+          if [ -n "$COMMAND" ]; then
+            echo "Executing: $COMMAND"
+            if [[ "$COMMAND" == *"build:frontend"* ]]; then
+              cd frontend && npm run build -- --configuration production && cd ..
+            elif [[ "$COMMAND" == *"build:server"* ]]; then
+              # Run server build with specific TypeScript version
+              npx tsc --project tsconfig.json --strict true
+            else
+              eval "$COMMAND"
+            fi
+          else
+            echo "No build command specified, running default builds"
+            # Build frontend
+            cd frontend && npm run build -- --configuration production && cd ..
+            # Build server
+            npx tsc --project tsconfig.json --strict true
+          fi
+        fi
+
+    - name: "Upload Maven Artifact"
+      if: ${{ inputs.tool == 'mavenbuild' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: docker-image
+        path: target/
+        retention-days: 1
+
+    - name: "Upload Node Artifact"
+      if: ${{ inputs.tool == 'nodebuild' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: docker-image
+        path: |
+          dist/
+          build/
+          package.json
+          node_modules/
+        retention-days: 1
