@@ -60,7 +60,7 @@ runs:
         echo "{" > all_tools.json
 
         first=1
-        for default_file in github-pipeline/config/*-default.config; do
+        for default_file in github-shared-library/config/*-default.config; do
           tool_name=$(basename "$default_file" -default.config)
           override_file=".github/workflows/config/$tool_name.config"
 

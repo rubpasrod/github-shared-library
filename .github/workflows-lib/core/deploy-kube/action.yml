@@ -22,14 +22,14 @@ runs:
                 s|__APP_LABEL__|${{ fromJson(inputs.config).deploy.APP_LABEL }}|g;
                 s|__IMAGE__|$IMAGE|g;
                 s|__SERVICE_PORT__|${{ fromJson(inputs.config).deploy.SERVICE_PORT }}|g" \
-                github-pipeline/manifests/deployment.yml > "$DEPLOY_TMP"
+                github-shared-library/manifests/deployment.yml > "$DEPLOY_TMP"
 
             sed "s|__SERVICE_NAME__|${{ fromJson(inputs.config).deploy.SERVICE_NAME }}|g;
                 s|__APP_LABEL__|${{ fromJson(inputs.config).deploy.APP_LABEL }}|g;
                 s|__SERVICE_PORT__|${{ fromJson(inputs.config).deploy.SERVICE_PORT }}|g;
                 s|__TARGET_PORT__|${{ fromJson(inputs.config).deploy.TARGET_PORT }}|g;
                 s|__NODE_PORT__|${{ fromJson(inputs.config).deploy.NODE_PORT }}|g" \
-                github-pipeline/manifests/service.yml > "$SERVICE_TMP"
+                github-shared-library/manifests/service.yml > "$SERVICE_TMP"
 
             kubectl apply -f "$DEPLOY_TMP"
             kubectl apply -f "$SERVICE_TMP"
@@ -47,7 +47,7 @@ runs:
       shell: bash
       run: |
         eval $(minikube docker-env)
-        kubectl apply -f github-pipeline/manifests/
+        kubectl apply -f github-shared-library/manifests/
 
     - name: "Check Deployment Status"
       shell: bash

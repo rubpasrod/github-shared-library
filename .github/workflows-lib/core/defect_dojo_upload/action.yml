@@ -17,8 +17,8 @@ runs:
       shell: bash
       id: set-id
       run: |
-        chmod +x github-pipeline/scripts/defectdojo/create-engagement.sh
-        ENGAGEMENT_ID=$(./github-pipeline/scripts/defectdojo/create-engagement.sh)
+        chmod +x github-shared-library/scripts/defectdojo/create-engagement.sh
+        ENGAGEMENT_ID=$(./github-shared-library/scripts/defectdojo/create-engagement.sh)
         echo "engagement_id=${ENGAGEMENT_ID}" >> "$GITHUB_OUTPUT"
         echo "$ENGAGEMENT_ID"
       env:
@@ -29,8 +29,8 @@ runs:
     - name: "Upload scan results"
       shell: bash
       run: |
-        chmod +x github-pipeline/scripts/defectdojo/upload-scan.sh
-        ./github-pipeline/scripts/defectdojo/upload-scan.sh
+        chmod +x github-shared-library/scripts/defectdojo/upload-scan.sh
+        ./github-shared-library/scripts/defectdojo/upload-scan.sh
         echo "${{ steps.set-id.outputs.engagement_id }}"
       env:
         API_TOKEN: ${{ inputs.DEFECTDOJO_API_TOKEN }}

@@ -37,7 +37,7 @@ runs:
         ls -la
 
         echo "Listing defectdojo scripts folder:"
-        if cd github-pipeline/scripts/defectdojo 2>/dev/null; then
+        if cd github-shared-library/scripts/defectdojo 2>/dev/null; then
           ls -la
         else
           echo "❌ defectdojo scripts folder does not exist!"
@@ -68,7 +68,7 @@ runs:
         GITHUB_WORKSPACE: ${{ github.workspace }}
       run: |
         set -e
-        cd github-pipeline/scripts/defectdojo || { echo "❌ defectdojo script folder not found!"; exit 1; }
+        cd github-shared-library/scripts/defectdojo || { echo "❌ defectdojo script folder not found!"; exit 1; }
 
         if [ ! -f create-engagement.sh ]; then
           echo "❌ create-engagement.sh not found!"
