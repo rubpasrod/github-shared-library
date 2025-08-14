@@ -140,17 +140,35 @@ jobs:
       - name: Create REPORTS_DIR
         run: |
           mkdir -p $REPORTS_DIR/temp-reports
-      
+
       - name: Download all reports artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ${{ github.workspace }}/REPORTS_DIR/temp-reports
-          pattern: '*-reports'
+          path: all-reports
+          pattern: '*-reports-*'
           merge-multiple: true
+
+      - name: Unify reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p $REPORTS_DIR/temp-reports
+
+          # Concatenar report_names.txt únicos
+          find all-reports -type f -name 'report_names.txt' -exec cat {} + \
+            | awk 'NF && !seen[$0]++' > $REPORTS_DIR/temp-reports/report_names.txt
+
+          # Concatenar scan_types.txt únicos
+          find all-reports -type f -name 'scan_types.txt' -exec cat {} + \
+            | awk 'NF && !seen[$0]++' > $REPORTS_DIR/temp-reports/scan_types.txt
+
+          # Copiar todos los reportes reales
+          find all-reports -type f ! -name 'report_names.txt' ! -name 'scan_types.txt' \
+            -exec cp {} $REPORTS_DIR/temp-reports/ \;
 
       - name: Debug reports directory
         run: |
-          echo "Listing downloaded reports:"
+          echo "Listing unified reports:"
           ls -la $REPORTS_DIR/temp-reports || echo "No reports found"
 
       - name: "Upload to DefectDojo"
@@ -160,6 +178,7 @@ jobs:
           config: ${{ needs.preflight.outputs.config }}
           BASE_URL: ${{ fromJson(needs.preflight.outputs.config).global.BASE_URL }}
           DEFECTDOJO_API_TOKEN: ${{ secrets.DEFECTDOJO_API_TOKEN }}
+
 
           
   clean-runner:

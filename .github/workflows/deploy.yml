@@ -104,35 +104,3 @@ jobs:
             name: temp-deploy-reports-${{ matrix.tool }}
             path: ./REPORTS_DIR/
             retention-days: 1
-
-    unify-reports:
-      name: "Unify Reports"
-      needs: [dynamic-tools]  
-      runs-on: ${{ inputs.runner-label }}
-      steps:
-        - name: Download all temp-reports artifacts
-          uses: actions/download-artifact@v4
-          with:
-            path: all-reports
-            pattern: temp-deploy-reports-*
-            merge-multiple: true
-
-        - name: Create unified reports directory
-          run: |
-            mkdir -p deploy-reports
-            find all-reports -type f -exec cp {} deploy-reports \;
-
-        - name: Upload unified reports
-          uses: actions/upload-artifact@v4
-          with:
-            name: deploy-reports
-            path: deploy-reports/
-            retention-days: 1
-
-        - name: Delete Temp Artifacts
-          uses: jimschubert/delete-artifacts-action@v1
-          with:
-            GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-            GITHUB_REPOSITORY: ${{ github.repository }}
-            pattern: temp-deploy-reports-*
-            min_bytes: '0'   
