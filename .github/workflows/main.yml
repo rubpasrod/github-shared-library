@@ -155,7 +155,7 @@ jobs:
 
       - name: "Upload to DefectDojo"
         if: ${{ steps.check_reports.outputs.exist == 'true' }}
-        uses: ./github-pipeline/.github/workflows-lib/defect_dojo_template
+        uses: ./github-shared-library/.github/workflows-lib/defect_dojo_template
         with:
           config: ${{ needs.preflight.outputs.config }}
           BASE_URL: ${{ fromJson(needs.preflight.outputs.config).global.BASE_URL }}

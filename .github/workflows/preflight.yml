@@ -47,7 +47,7 @@ jobs:
               
         - name: Load all variables
           id: load
-          uses: ./github-pipeline/.github/workflows-lib/core/load_all_variables
+          uses: ./github-shared-library/.github/workflows-lib/core/load_all_variables
 
     # Init Node
     node-dependencies:
@@ -112,7 +112,7 @@ jobs:
 
         - name: Build Script
           id: export
-          uses: ./github-pipeline/.github/workflows-lib/core/build_scripts
+          uses: ./github-shared-library/.github/workflows-lib/core/build_scripts
           with: 
             config: "${{ needs.load-all.outputs.config }}"
 
@@ -150,7 +150,7 @@ jobs:
             
         - name: Run tool
           if: ${{ steps.check_enabled.outputs.enabled == 'true' }}  
-          uses: ./github-pipeline/.github/workflows-lib/security/template
+          uses: ./github-shared-library/.github/workflows-lib/security/template
           with: 
             command: "${{ fromJson(needs.build-scripts.outputs.config)[matrix.tool].command }}"
             report_name: "${{ fromJson(needs.build-scripts.outputs.config)[matrix.tool].report_name }}"

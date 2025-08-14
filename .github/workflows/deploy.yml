@@ -43,7 +43,7 @@ jobs:
             version: 'v1.29.0' 
 
         - name: Deploy Container
-          uses: ./github-pipeline/.github/workflows-lib/core/deploy-kube
+          uses: ./github-shared-library/.github/workflows-lib/core/deploy-kube
           with: 
             config: "${{ inputs.config }}"
             docker_username: "${{ secrets.DOCKER_USERNAME_2 }}"
@@ -90,7 +90,7 @@ jobs:
 
         - name: Run tool
           if: ${{ steps.check_enabled.outputs.enabled == 'true' }}  
-          uses: ./github-pipeline/.github/workflows-lib/security/template
+          uses: ./github-shared-library/.github/workflows-lib/security/template
           with: 
             command: "${{ fromJson(inputs.config)[matrix.tool].command }}"
             report_name: "${{ fromJson(inputs.config)[matrix.tool].report_name }}"

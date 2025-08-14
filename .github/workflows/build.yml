@@ -87,7 +87,7 @@ jobs:
             path: github-shared-library
             
         - name: "Docker Build"
-          uses: ./github-pipeline/.github/workflows-lib/docker/docker-build
+          uses: ./github-shared-library/.github/workflows-lib/docker/docker-build
           with:
             docker_image: ${{ fromJson(inputs.config).docker.IMAGE_NAME }}
             docker_tag: ${{ fromJson(inputs.config).docker.TAG }}

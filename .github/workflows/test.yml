@@ -51,7 +51,7 @@ jobs:
 
         - name: Run tool
           if: ${{ steps.check_enabled.outputs.enabled == 'true' }}  
-          uses: ./github-pipeline/.github/workflows-lib/security/template
+          uses: ./github-shared-library/.github/workflows-lib/security/template
           with: 
             command: "${{ fromJson(inputs.config)[matrix.tool].command }}"
             report_name: "${{ fromJson(inputs.config)[matrix.tool].report_name }}"

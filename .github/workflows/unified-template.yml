@@ -57,7 +57,7 @@ jobs:
 
       - name: Run Tool
         if: ${{ steps.conditional.outputs.skip != 'true' }}
-        uses: ./github-pipeline/.github/workflows-lib/core/managers/run-template
+        uses: ./github-shared-library/.github/workflows-lib/core/managers/run-template
         with:
           config: ${{ inputs.config }}
           tool: ${{ inputs.tool }}
