@@ -95,6 +95,30 @@ runs:
         echo "Listing $GITHUB_WORKSPACE/REPORTS_DIR/temp-reports:"
         ls -la "$GITHUB_WORKSPACE/REPORTS_DIR/temp-reports" || echo "temp-reports does not exist"
 
+    - name: "Debug REPORTS_DIR contents"
+      if: ${{ steps.check_reports.outputs.exist == 'true' }}
+      shell: bash
+      run: |
+        REPORTS_DIR="$GITHUB_WORKSPACE/REPORTS_DIR/temp-reports"
+        
+        echo "=== Listing all files recursively in REPORTS_DIR ==="
+        ls -R "$REPORTS_DIR" || echo "REPORTS_DIR does not exist"
+        
+        echo
+        echo "=== Contents of report_names.txt ==="
+        if [[ -f "$REPORTS_DIR/report_names.txt" ]]; then
+            cat "$REPORTS_DIR/report_names.txt"
+        else
+            echo "❌ report_names.txt not found"
+        fi
+        
+        echo
+        echo "=== Contents of scan_types.txt ==="
+        if [[ -f "$REPORTS_DIR/scan_types.txt" ]]; then
+            cat "$REPORTS_DIR/scan_types.txt"
+        else
+            echo "❌ scan_types.txt not found"
+        fi
 
 
     - name: Upload scan results
