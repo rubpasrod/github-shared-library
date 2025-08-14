@@ -106,7 +106,7 @@ runs:
         ENGAGEMENT_ID:  ${{ steps.set-id.outputs.engagement_id }}
         GITHUB_WORKSPACE: ${{ github.workspace }}
       run: |
-        cd github-pipeline/scripts/defectdojo || { echo "❌ defectdojo script folder not found!"; exit 1; }
+        cd github-shared-library/scripts/defectdojo || { echo "❌ defectdojo script folder not found!"; exit 1; }
         if [ ! -f upload-scan.sh ]; then
           echo "upload-scan.sh not found!"
           exit 1
