@@ -37,11 +37,11 @@ runs:
         ./command.sh
       continue-on-error: true
 
-    # - name: "DefectDojo upload"
-    #   if: ${{ inputs.all_in_one_upload == 'false' }}
-    #   uses: ./github-pipeline/.github/workflows-lib/core/defect_dojo_template
-    #   with:
-    #     config: ${{ inputs.config }}
-    #     BASE_URL: ${{ fromJson(inputs.config).global.base_url }}
-    #     DEFECTDOJO_API_TOKEN: ${{ inputs.DEFECTDOJO_API_TOKEN }}
-    #     report: ${{ inputs.report_name }}
+    - name: "DefectDojo upload"
+      if: ${{ inputs.all_in_one_upload == 'false' }}
+      uses: ./github-pipeline/.github/workflows-lib/core/defect_dojo_template
+      with:
+        config: ${{ inputs.config }}
+        BASE_URL: ${{ fromJson(inputs.config).global.base_url }}
+        DEFECTDOJO_API_TOKEN: ${{ inputs.DEFECTDOJO_API_TOKEN }}
+        report: ${{ inputs.report_name }}

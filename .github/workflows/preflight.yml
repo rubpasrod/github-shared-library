@@ -162,7 +162,7 @@ jobs:
           continue-on-error: true
 
         - name: Upload reports artifact
-          if: ${{ steps.check_enabled.outputs.enabled == 'true' }}
+          if: ${{ steps.check_enabled.outputs.enabled == 'true' && fromJson(needs.build-scripts.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
           uses: actions/upload-artifact@v4
           with:
             name: temp-preflight-reports-${{ matrix.tool }}  
