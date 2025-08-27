@@ -123,17 +123,14 @@ jobs:
     steps:
       - name: "Check if all the jobs have to be uploaded"
         id: check_reports
-        if: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         run: |
           echo "exist=true" >> $GITHUB_OUTPUT
 
       - name: Checkout main repo
-        if: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         uses: actions/checkout@v4
           
       - name: Checkout github-pipeline
         uses: actions/checkout@v4
-        if: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         with:
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           repository: rubpasrod/github-shared-library
@@ -141,12 +138,10 @@ jobs:
           path: github-shared-library
       
       - name: Create REPORTS_DIR
-        if: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         run: |
-          mkdir -p $REPORTS_DIR/temp-reports
+            mkdir -p $REPORTS_DIR/temp-reports
 
       - name: Download all reports artifacts
-        if: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         uses: actions/download-artifact@v4
         with:
           path: all-reports
@@ -155,28 +150,36 @@ jobs:
 
       - name: Unify reports
         shell: bash
-        if: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         run: |
           set -euo pipefail
-          mkdir -p $REPORTS_DIR/temp-reports
+          
+          if [[ "${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD }}" != "false" ]]; then
+            mkdir -p "$REPORTS_DIR/temp-reports"
 
-          find all-reports -type f -name 'report_names.txt' -exec cat {} + \
-            | awk 'NF && !seen[$0]++' > $REPORTS_DIR/temp-reports/report_names.txt
+            find all-reports -type f -name 'report_names.txt' -exec cat {} + \
+              | awk 'NF && !seen[$0]++' > "$REPORTS_DIR/temp-reports/report_names.txt"
 
-          find all-reports -type f -name 'scan_types.txt' -exec cat {} + \
-            | awk 'NF && !seen[$0]++' > $REPORTS_DIR/temp-reports/scan_types.txt
+            find all-reports -type f -name 'scan_types.txt' -exec cat {} + \
+              | awk 'NF && !seen[$0]++' > "$REPORTS_DIR/temp-reports/scan_types.txt"
 
-          find all-reports -type f ! -name 'report_names.txt' ! -name 'scan_types.txt' \
-            -exec cp {} $REPORTS_DIR/temp-reports/ \;
+            find all-reports -type f ! -name 'report_names.txt' ! -name 'scan_types.txt' \
+              -exec cp {} "$REPORTS_DIR/temp-reports/" \;
+          else
+            echo "Skipping unify reports because ALL_IN_ONE_UPLOAD is false"
+          fi
 
       - name: Debug reports directory
         if: ${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         run: |
-          echo "Listing unified reports:"
-          ls -la $REPORTS_DIR/temp-reports || echo "No reports found"
+          if [[ "${{ fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD }}" != "false" ]]; then
+            echo "Listing unified reports:"
+            ls -la $REPORTS_DIR/temp-reports || echo "No reports found"
+          else
+            echo "Skipping listing reports because ALL_IN_ONE_UPLOAD is false"
+          fi
 
       - name: "Upload to DefectDojo"
-        if: ${{ steps.check_reports.outputs.exist == 'true' && fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD == 'false' }}
+        if: ${{ steps.check_reports.outputs.exist == 'true' && fromJson(needs.preflight.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
         uses: ./github-shared-library/.github/workflows-lib/defect_dojo_template
         with:
           config: ${{ needs.preflight.outputs.config }}
