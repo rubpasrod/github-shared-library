@@ -24,16 +24,16 @@ runs:
     - name: "Create Report Directory"
       shell: sh
       run: |
-        mkdir -p "REPORTS_DIR"
-        chmod -R a+rw "REPORTS_DIR"
+        mkdir -p "REPORTS_DIR/temp-reports
+        chmod -R a+rw "REPORTS_DIR/temp-reports"
          
     - name: "Run Script"
       shell: sh
       run: |
         echo "${{ inputs.command }}" > command.sh
         chmod +x command.sh
-        echo "${{ inputs.report_name }}" >> REPORTS_DIR/report_names.txt
-        echo "${{ inputs.scan_type }}" >> REPORTS_DIR/scan_types.txt
+        echo "${{ inputs.report_name }}" >> REPORTS_DIR/temp-reports/report_names.txt
+        echo "${{ inputs.scan_type }}" >> REPORTS_DIR/temp-reports/scan_types.txt
         ./command.sh
       continue-on-error: true
 

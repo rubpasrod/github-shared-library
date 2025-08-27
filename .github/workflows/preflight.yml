@@ -166,6 +166,6 @@ jobs:
           uses: actions/upload-artifact@v4
           with:
             name: temp-preflight-reports-${{ matrix.tool }}  
-            path: ./REPORTS_DIR/
+            path: ./REPORTS_DIR/temp-reports/
             retention-days: 1
 
