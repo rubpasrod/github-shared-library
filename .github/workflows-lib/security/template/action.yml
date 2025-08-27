@@ -42,16 +42,12 @@ runs:
 
         mkdir -p "$DEST_DIR"
         pwd
-        ls -la REPORTS_DIR/temp-reports/
-        ls -la REPORTS_DIR/
+
         if [[ -f "$REPORT_FILE" ]]; then
             mv "$REPORT_FILE" "$DEST_DIR/"
         else
             echo "⚠️ Report file $REPORT_FILE not found, skipping move"
         fi
-
-        ls -la REPORTS_DIR/temp-reports/
-        ls -la REPORTS_DIR/
 
 
       continue-on-error: true
