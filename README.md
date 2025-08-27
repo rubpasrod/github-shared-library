@@ -12,7 +12,7 @@
 ### [9. Checkout Maven](./docs/problems/checkout-maven.md)
 ### [10. Reducing Code Length](./docs/problems/reducing-code-length.md)
 ### [11. Runners](./docs/problems/runner.md)
-
+### [12. Artifacts](./docs/problems/artifacts.md)
 ## Project Structure
 ```plaintext
 .
