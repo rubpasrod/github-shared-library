@@ -37,11 +37,22 @@ runs:
 
         ./command.sh
 
-        REPORT_FILE="${{ inputs.report_name }}"
-        mv "REPORTS_DIR/$INPUT_REPORT_NAME" "REPORTS_DIR/temp-reports/"
+        REPORTS_DIR="REPORTS_DIR"  
+        REPORT_FILE="$REPORTS_DIR/$INPUT_REPORT_NAME"
+        DEST_DIR="$REPORTS_DIR/temp-reports"
 
-        ls -la REPORTS_DIR/temp-reports/
-        ls -la REPORTS_DIR/
+        mkdir -p "$DEST_DIR"
+
+        if [[ -f "$REPORT_FILE" ]]; then
+            mv "$REPORT_FILE" "$DEST_DIR/"
+            ls -la REPORTS_DIR/temp-reports/ 
+            ls -la REPORTS_DIR/
+        else
+            echo "⚠️ Report file $REPORT_FILE not found, skipping move"
+            ls -la REPORTS_DIR/temp-reports/ 
+            ls -la REPORTS_DIR/
+        fi
+
       continue-on-error: true
 
     - name: "DefectDojo upload"
