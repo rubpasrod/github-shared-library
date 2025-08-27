@@ -39,7 +39,7 @@ runs:
 
     - name: "DefectDojo upload"
       if: ${{ inputs.all_in_one_upload == 'false' }}
-      uses: ./github-pipeline/.github/workflows-lib/core/defect_dojo_template
+      uses: ./github-shared-library/.github/workflows-lib/defect_dojo_template
       with:
         config: ${{ inputs.config }}
         BASE_URL: ${{ fromJson(inputs.config).global.base_url }}
