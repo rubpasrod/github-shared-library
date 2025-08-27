@@ -37,21 +37,21 @@ runs:
 
         ./command.sh
 
-        REPORTS_DIR="REPORTS_DIR"  
-        REPORT_FILE="$REPORTS_DIR/$INPUT_REPORT_NAME"
-        DEST_DIR="$REPORTS_DIR/temp-reports"
+        REPORT_FILE="REPORTS_DIR/$INPUT_REPORT_NAME"
+        DEST_DIR="REPORTS_DIR/temp-reports"
 
         mkdir -p "$DEST_DIR"
-
+        ls -la REPORTS_DIR/temp-reports/
+        ls -la REPORTS_DIR/
         if [[ -f "$REPORT_FILE" ]]; then
             mv "$REPORT_FILE" "$DEST_DIR/"
-            ls -la REPORTS_DIR/temp-reports/ 
-            ls -la REPORTS_DIR/
         else
             echo "⚠️ Report file $REPORT_FILE not found, skipping move"
-            ls -la REPORTS_DIR/temp-reports/ 
-            ls -la REPORTS_DIR/
         fi
+
+        ls -la REPORTS_DIR/temp-reports/
+        ls -la REPORTS_DIR/
+
 
       continue-on-error: true
 
