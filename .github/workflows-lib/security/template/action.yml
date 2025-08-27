@@ -28,13 +28,24 @@ runs:
         chmod -R a+rw "REPORTS_DIR/temp-reports"
          
     - name: "Run Script"
-      shell: sh
+      shell: bash
       run: |
         echo "${{ inputs.command }}" > command.sh
         chmod +x command.sh
         echo "${{ inputs.report_name }}" >> REPORTS_DIR/temp-reports/report_names.txt
         echo "${{ inputs.scan_type }}" >> REPORTS_DIR/temp-reports/scan_types.txt
+
         ./command.sh
+
+        REPORT_FILE="${{ inputs.report_name }}"
+        if [[ -f "$REPORT_FILE" ]]; then
+          mv "$REPORT_FILE" REPORTS_DIR/temp-reports/
+        else
+          echo "⚠️ Report file $REPORT_FILE not found, skipping move"
+        fi
+
+        ls -la REPORTS_DIR/temp-reports/
+        ls -la REPORTS_DIR/
       continue-on-error: true
 
     - name: "DefectDojo upload"
