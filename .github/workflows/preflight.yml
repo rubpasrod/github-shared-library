@@ -179,7 +179,7 @@ jobs:
       runs-on: ${{ inputs.runner-label }}
       steps:
         - name: upload all reports to DefectDojo
-          if: ${{ fromJson(needs.build-scripts.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
+          if: ${{ fromJson(needs.build-scripts.outputs.config).global.ALL_IN_ONE_UPLOAD == 'false' }}
           uses: ./github-shared-library/.github/workflows-lib/defect_dojo_template
           with:
             config: ${{ needs.load-all.outputs.config }}
