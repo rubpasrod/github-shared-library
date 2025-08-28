@@ -169,3 +169,19 @@ jobs:
             path: ./REPORTS_DIR/temp-reports/
             retention-days: 1
 
+    defectDojo-upload:
+      name: DefectDojo upload
+      needs: 
+        - load-all
+        - security-gate
+        - build-scripts
+        - static-tools
+      runs-on: ${{ inputs.runner-label }}
+      steps:
+        - name: upload all reports to DefectDojo
+          if: ${{ fromJson(needs.build-scripts.outputs.config).global.ALL_IN_ONE_UPLOAD != 'false' }}
+          uses: ./github-shared-library/.github/workflows-lib/defect_dojo_template
+          with:
+            config: ${{ needs.load-all.outputs.config }}
+            BASE_URL: ${{ inputs.base_url }}
+            DEFECTDOJO_API_TOKEN: ${{ secrets.DEFECTDOJO_API_TOKEN }}
