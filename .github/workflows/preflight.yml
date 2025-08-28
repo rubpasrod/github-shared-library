@@ -178,8 +178,17 @@ jobs:
         - static-tools
       runs-on: ${{ inputs.runner-label }}
       steps:
+        - name: check if ALL_IN_ONE_UPLOAD is false
+          id: check_all_in_one
+          run: |
+            if [ "${{ fromJson(needs.build-scripts.outputs.config).global.ALL_IN_ONE_UPLOAD }}" == 'false' ]; then
+              echo "run_upload=false" >> $GITHUB_OUTPUT
+            else
+              echo "run_upload=true" >> $GITHUB_OUTPUT
+            fi
+
         - name: upload all reports to DefectDojo
-          if: ${{ fromJson(needs.build-scripts.outputs.config).global.ALL_IN_ONE_UPLOAD == 'false' }}
+          if: steps.check_all_in_one.outputs.run_upload == 'true'
           uses: ./github-shared-library/.github/workflows-lib/defect_dojo_template
           with:
             config: ${{ needs.load-all.outputs.config }}
